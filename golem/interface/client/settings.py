@@ -12,6 +12,10 @@ Setting = namedtuple('Setting', ['help', 'type', 'converter', 'validator'])
 def _int(x):
     return int(x)
 
+
+def _float(x):
+    return float(x)
+
 _cpu_count = multiprocessing.cpu_count()
 _virtual_mem = int(virtual_memory().total / 1024)
 
@@ -33,11 +37,11 @@ class Settings(object):
         default=False,
         help="Show provider settings"
     )
-    requester = Argument(
-        '--requester',
+    requestor = Argument(
+        '--requestor',
         optional=True,
         default=False,
-        help="Show requester settings"
+        help="Show requestor settings"
     )
 
     settings = {
@@ -96,16 +100,16 @@ class Settings(object):
             lambda x: x > 0
         ),
         'requesting_trust': Setting(
-            'Minimal requester trust',
-            'int [-100, 100]',
-            _int,
-            lambda x: -100 <= x <= 100
+            'Minimal requestor trust',
+            'float [-1., 1.]',
+            _float,
+            lambda x: -1. <= x <= 1.
         ),
         'computing_trust': Setting(
             'Minimal provider trust',
-            'int [-100, 100]',
-            _int,
-            lambda x: -100 <= x <= 100
+            'float [-1., 1.]',
+            _float,
+            lambda x: -1. <= x <= 1.
         ),
         'min_price': Setting(
             'Min ETH/h price (provider)',
@@ -114,7 +118,7 @@ class Settings(object):
             lambda x: x >= 0
         ),
         'max_price': Setting(
-            'Max ETH/h price (requester)',
+            'Max ETH/h price (requestor)',
             'float >= 0',
             lambda x: float(x) * denoms.ether,
             lambda x: x >= 0
@@ -170,38 +174,38 @@ class Settings(object):
         'use_ipv6', 'opt_peer_num', 'getting_peers_interval', 'p2p_session_timeout', 'send_pings', 'pings_interval'
     ]
 
-    requester_settings = [
+    requestor_settings = [
         'max_price', 'computing_trust'
     ]
 
     key = Argument('key', help='Setting name', optional=True)
     value = Argument('value', help='Setting value', optional=True)
 
-    @command(arguments=(basic, provider, requester), help="Show current settings")
-    def show(self, basic, provider, requester):
+    @command(arguments=(basic, provider, requestor), help="Show current settings")
+    def show(self, basic, provider, requestor):
 
-        config = CommandHelper.wait_for(Settings.client.get_config())
-        if not (basic ^ provider) and not (provider ^ requester):
-            return config.__dict__
+        config = CommandHelper.wait_for(Settings.client.get_settings())
+        if not (basic ^ provider) and not (provider ^ requestor):
+            return config
 
         result = dict()
 
         if basic:
             result.update({
-                k: v for k, v in config.__dict__.iteritems()
+                k: v for k, v in config.iteritems()
                 if k in Settings.basic_settings
             })
 
-        if requester:
+        if requestor:
             result.update({
-                k: v for k, v in config.__dict__.iteritems()
-                if k in Settings.requester_settings
+                k: v for k, v in config.iteritems()
+                if k in Settings.requestor_settings
             })
 
         if provider:
             result.update({
-                k: v for k, v in config.__dict__.iteritems()
-                if k not in Settings.basic_settings and k not in Settings.requester_settings
+                k: v for k, v in config.iteritems()
+                if k not in Settings.basic_settings and k not in Settings.requestor_settings
             })
 
         return result

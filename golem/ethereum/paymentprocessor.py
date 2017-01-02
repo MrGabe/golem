@@ -109,7 +109,7 @@ class PaymentProcessor(object):
         if self.__balance is None or refresh:
             addr = keys.privtoaddr(self.__privkey)
             # TODO: Hack RPC client to allow using raw address.
-            self.__balance = self.__client.get_balance(addr.encode('hex'))
+            self.__balance = self.__client.get_balance('0x' + addr.encode('hex'))
             log.info("Balance: {}".format(self.__balance / denoms.ether))
         return self.__balance
 
@@ -117,8 +117,8 @@ class PaymentProcessor(object):
         if self.__deposit is None or refresh:
             data = bank_contract.encode('balance', ())
             addr = keys.privtoaddr(self.__privkey)
-            r = self.__client.call(_from=addr.encode('hex'),
-                                   to=self.BANK_ADDR.encode('hex'),
+            r = self.__client.call(_from='0x' + addr.encode('hex'),
+                                   to='0x' + self.BANK_ADDR.encode('hex'),
                                    data=data.encode('hex'),
                                    block='pending')
             if r is None or r == '0x':
@@ -159,7 +159,7 @@ class PaymentProcessor(object):
         payments = self.__awaiting  # FIXME: Should this list be synchronized?
         self.__awaiting = []
         addr = keys.privtoaddr(self.__privkey)  # TODO: Should be done once?
-        nonce = self.__client.get_transaction_count(addr.encode('hex'))
+        nonce = self.__client.get_transaction_count('0x' + addr.encode('hex'))
         p, value = _encode_payments(payments)
         deposit = self.deposit_balance(refresh=True)
         # First use ether from deposit, so transfer only missing amount.
@@ -197,14 +197,14 @@ class PaymentProcessor(object):
     def monitor_progress(self):
         confirmed = []
         for h, payments in self.__inprogress.iteritems():
-            hstr = h.encode('hex')
+            hstr = '0x' + h.encode('hex')
             log.info("Checking {:.6} tx [{}]".format(hstr, len(payments)))
             receipt = self.__client.get_transaction_receipt(hstr)
             if receipt:
                 block_hash = receipt['blockHash'][2:]
                 assert len(block_hash) == 2 * 32
-                block_number = int(receipt['blockNumber'], 16)
-                gas_used = int(receipt['gasUsed'], 16)
+                block_number = receipt['blockNumber']
+                gas_used = receipt['gasUsed']
                 total_fee = gas_used * self.GAS_PRICE
                 fee = total_fee // len(payments)
                 log.info("Confirmed {:.6}: block {} ({}), gas {}, fee {}"

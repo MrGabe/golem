@@ -1,7 +1,8 @@
 import logging
 import time
 
-from golem.core.common import HandleKeyError, get_current_time, timeout_to_deadline
+from golem.core.common import HandleKeyError, get_timestamp_utc, \
+    timeout_to_deadline
 from golem.core.hostaddress import get_external_address
 from golem.manager.nodestatesnapshot import LocalTaskStateSnapshot
 from golem.network.transport.tcpnetwork import SocketAddress
@@ -95,7 +96,13 @@ class TaskManager(TaskEventListener):
         assert self.key_id
         assert SocketAddress.is_proper_address(self.listen_address, self.listen_port)
 
+        prev_pub_addr, prev_pub_port, prev_nat_type = self.node.pub_addr, self.node.pub_port, self.node.nat_type
         self.node.pub_addr, self.node.pub_port, self.node.nat_type = get_external_address(self.listen_port)
+
+        if prev_pub_addr != self.node.pub_addr or \
+           prev_pub_port != self.node.pub_port or \
+           prev_nat_type != self.node.nat_type:
+            self.update_task_signatures()
 
         task.header.task_owner_address = self.listen_address
         task.header.task_owner_port = self.listen_port
@@ -199,6 +206,10 @@ class TaskManager(TaskEventListener):
         else:
             logger.error("This is not my subtask {}".format(subtask_id))
             return 0
+
+    def update_task_signatures(self):
+        for task in self.tasks.values():
+            task.header.signature = self.sign_task_header(task.header)
 
     def sign_task_header(self, task_header):
         return self.keys_auth.sign(task_header.to_binary())
@@ -316,7 +327,7 @@ class TaskManager(TaskEventListener):
             th = t.header
             if self.tasks_states[th.task_id].status not in self.activeStatus:
                 continue
-            cur_time = get_current_time()
+            cur_time = get_timestamp_utc()
             if cur_time > th.deadline:
                 logger.info("Task {} dies".format(th.task_id))
                 t.task_stats = TaskStatus.timeout

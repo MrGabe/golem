@@ -3,8 +3,10 @@ import logging
 import time
 from copy import deepcopy
 
-from golem.core.simpleserializer import CBORSerializer
+from golem.core.simpleserializer import CBORSerializer, DictSerializer
 from golem.core.variables import APP_VERSION
+from golem.docker.image import DockerImage
+from golem.network.p2p.node import Node
 
 logger = logging.getLogger("golem.task")
 
@@ -37,32 +39,33 @@ class TaskHeader(object):
         self.signature = signature
 
     def to_binary(self):
-        return self.dict_to_binary(vars(self))
+        return self.dict_to_binary(self.to_dict())
 
     def to_dict(self):
-        return dict(vars(self))
+        return DictSerializer.dump(self, typed=False)
 
     @staticmethod
     def from_dict(dictionary):
-        clean = dict(dictionary)
-        clean.pop('last_checking', None)
-        return TaskHeader(**clean)
+        th = DictSerializer.load(dictionary, as_class=TaskHeader)
+        th.last_checking = time.time()
+
+        if isinstance(th.task_owner, dict):
+            th.task_owner = DictSerializer.load(th.task_owner, as_class=Node)
+        if hasattr(th, 'docker_images') and th.docker_images is not None:
+            for i, di in enumerate(th.docker_images):
+                if isinstance(di, dict):
+                    th.docker_images[i] = DictSerializer.load(di, as_class=DockerImage)
+        return th
 
     @classmethod
     def dict_to_binary(cls, dictionary):
         self_dict = dict(dictionary)
-
         self_dict.pop('last_checking', None)
         self_dict.pop('signature', None)
-        self_dict.pop('deadline', None)
 
-        task_owner = self_dict.get('task_owner')
-        if task_owner:
-            self_dict['task_owner'] = cls._ordered(vars(task_owner))
-
-        docker_images = self_dict.get('docker_images')
-        if docker_images:
-            self_dict['docker_images'] = [cls._ordered(vars(d)) for d in docker_images]
+        self_dict['task_owner'] = cls._ordered(self_dict['task_owner'])
+        if self_dict.get('docker_images'):
+            self_dict['docker_images'] = [cls._ordered(di) for di in self_dict['docker_images']]
 
         return CBORSerializer.dumps(cls._ordered(self_dict))
 

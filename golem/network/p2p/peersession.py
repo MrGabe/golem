@@ -17,16 +17,15 @@ P2P_PROTOCOL_ID = 'brass.0.2.1'
 
 
 class PeerSessionInfo(object):
+    attributes = [
+        'address', 'port',
+        'verified', 'degree', 'key_id',
+        'node_name', 'node_info',
+        'listen_port', 'conn_id'
+    ]
 
     def __init__(self, session):
-        attributes = [
-            'address', 'port',
-            'verified', 'degree', 'key_id',
-            'node_name', 'node_info',
-            'listen_port', 'conn_id'
-        ]
-
-        for attr in attributes:
+        for attr in self.attributes:
             setattr(self, attr, getattr(session, attr))
 
     def get_simplified_repr(self):
@@ -219,7 +218,7 @@ class PeerSession(BasicSafeSession):
     def send_set_task_session(self, key_id, node_info, conn_id, super_node_info):
         """ Send information that node from node_info want to start task session with key_id node
         :param key_id: target node key
-        :param Node node_info: information about requester
+        :param Node node_info: information about requestor
         :param uuid conn_id: connection id for reference
         :param Node|None super_node_info: information about known supernode
         """

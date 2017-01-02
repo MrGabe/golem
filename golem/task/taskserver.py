@@ -6,7 +6,7 @@ from collections import deque
 from golem.network.transport.network import ProtocolFactory, SessionFactory
 from golem.network.transport.tcpnetwork import TCPNetwork, TCPConnectInfo, SocketAddress, MidAndFilesProtocol
 from golem.network.transport.tcpserver import PendingConnectionsServer, PenConnStatus
-from golem.ranking.ranking import RankingStats
+from golem.ranking.ranking_min_max import RankingStats
 from golem.task.taskbase import TaskHeader
 from golem.task.taskconnectionshelper import TaskConnectionsHelper
 from taskcomputer import TaskComputer
@@ -165,9 +165,15 @@ class TaskServer(PendingConnectionsServer):
             task_id = th_dict_repr["task_id"]
             key_id = th_dict_repr["task_owner_key_id"]
             task_ids = self.task_manager.tasks.keys()
+            new_sig = True
 
-            if task_id not in task_ids and key_id != self.node.key:
+            if task_id in self.task_keeper.task_headers:
+                header = self.task_keeper.task_headers[task_id]
+                new_sig = th_dict_repr["signature"] != header.signature
+
+            if task_id not in task_ids and key_id != self.node.key and new_sig:
                 self.task_keeper.add_task_header(th_dict_repr)
+
             return True
         except Exception as err:
             logger.error("Wrong task header received {}".format(err))

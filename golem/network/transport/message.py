@@ -5,7 +5,7 @@ import time
 
 from golem.core.databuffer import DataBuffer
 from golem.core.simplehash import SimpleHash
-from golem.core.simpleserializer import SimpleSerializer
+from golem.core.simpleserializer import SimpleSerializer, CBORSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ class Message:
         """ Return serialized message
         :return str: serialized message """
         try:
-            return SimpleSerializer.dumps([self.type, self.sig, self.timestamp, self.dict_repr()])
+            return CBORSerializer.dumps([self.type, self.sig, self.timestamp, self.dict_repr()])
         except Exception as exc:
             logger.error("Error serializing message: {}".format(exc))
             raise
@@ -144,7 +144,7 @@ class Message:
         :return Message|None: deserialized message or none if this message type is unknown
         """
         try:
-            msg_repr = SimpleSerializer.loads(msg_)
+            msg_repr = CBORSerializer.loads(msg_)
         except Exception as exc:
             logger.error("Error deserializing message: {}".format(exc))
             msg_repr = None
@@ -725,7 +725,7 @@ class MessageSetTaskSession(Message):
         """
         Create message with information that node from node_info want to start task session with key_id node
         :param key_id: target node key
-        :param Node node_info: information about requester
+        :param Node node_info: information about requestor
         :param uuid conn_id: connection id for reference
         :param Node|None super_node_info: information about known supernode
         :param str sig: signature

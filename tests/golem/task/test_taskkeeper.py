@@ -1,12 +1,13 @@
 import time
-from datetime import timedelta
+from datetime import datetime
 from unittest import TestCase
 
 from mock import Mock
 
-from golem.core.common import get_current_time, timeout_to_deadline
+from golem.core.common import get_timestamp_utc, timeout_to_deadline
 from golem.environments.environment import Environment
 from golem.environments.environmentsmanager import EnvironmentsManager
+from golem.network.p2p.node import Node
 from golem.task.taskbase import TaskHeader, ComputeTaskDef
 from golem.task.taskkeeper import TaskHeaderKeeper, CompTaskKeeper, CompSubtaskInfo, logger
 from golem.tools.assertlogs import LogTestCase
@@ -88,17 +89,16 @@ class TestTaskHeaderKeeper(LogTestCase):
         task_header["task_id"] = "xyz"
         self.assertTrue(tk.add_task_header(task_header))
         th = tk.get_task()
+        assert isinstance(th.task_owner, Node)
         self.assertEqual(task_header["task_id"], th.task_id)
         self.assertEqual(task_header["max_price"], th.max_price)
         self.assertEqual(task_header["node_name"], th.node_name)
         self.assertEqual(task_header["task_owner_port"], th.task_owner_port)
         self.assertEqual(task_header["task_owner_key_id"], th.task_owner_key_id)
         self.assertEqual(task_header["environment"], th.environment)
-        self.assertEqual(task_header["task_owner"], th.task_owner)
         self.assertEqual(task_header["deadline"], th.deadline)
         self.assertEqual(task_header["subtask_timeout"], th.subtask_timeout)
         self.assertEqual(task_header["max_price"], th.max_price)
-        th = tk.get_task()
         self.assertEqual(task_header["task_id"], th.task_id)
 
     def test_old_tasks(self):
@@ -126,19 +126,88 @@ class TestTaskHeaderKeeper(LogTestCase):
         assert len(tk.supported_tasks) == 1
         assert tk.supported_tasks[0] == "xyz"
 
+    def test_task_header_update(self):
+        e = Environment()
+        e.accept_tasks = True
+
+        tk = TaskHeaderKeeper(EnvironmentsManager(), 10)
+        tk.environments_manager.add_environment(e)
+
+        assert not tk.add_task_header(dict())
+
+        task_header = get_task_header()
+        task_id = task_header["task_id"]
+
+        task_header["deadline"] = timeout_to_deadline(10)
+        assert tk.add_task_header(task_header)
+        assert task_id in tk.supported_tasks
+        assert tk.add_task_header(task_header)
+        assert task_id in tk.supported_tasks
+
+        task_header["max_price"] = 1
+        assert tk.add_task_header(task_header)
+        assert task_id not in tk.supported_tasks
+
+        tk.task_headers = {}
+        tk.supported_tasks = []
+
+        task_header["max_price"] = 1
+        assert tk.add_task_header(task_header)
+        assert task_id not in tk.supported_tasks
+
+        task_header['task_id'] = "newtaskID"
+        task_header['deadline'] = "WRONG DEADLINE"
+        assert not tk.add_task_header(task_header)
+
+    def test_is_correct(self):
+        tk = TaskHeaderKeeper(EnvironmentsManager(), 10)
+        th = get_task_header()
+
+        correct, err = tk.is_correct(th)
+        assert correct
+        assert err is None
+
+        th['deadline'] = datetime.now()
+        correct, err = tk.is_correct(th)
+        assert not correct
+        assert err == "Deadline is not a timestamp"
+
+        th['deadline'] = get_timestamp_utc() - 10
+        correct, err = tk.is_correct(th)
+        assert not correct
+        assert err == "Deadline already passed"
+
+        th['deadline'] = get_timestamp_utc() + 20
+        correct, err = tk.is_correct(th)
+        assert correct
+        assert err is None
+
+        th['subtask_timeout'] = "abc"
+        correct, err = tk.is_correct(th)
+        assert not correct
+        assert err == "Subtask timeout is not a number"
+
+        th['subtask_timeout'] = -131
+        correct, err = tk.is_correct(th)
+        assert not correct
+        assert err == "Subtask timeout is less than 0"
+
+
 def get_task_header():
     return {
         "task_id": "xyz",
         "node_name": "ABC",
-        "task_owner": "task_owner",
+        "task_owner": dict(),
         "task_owner_address": "10.10.10.10",
         "task_owner_port": 10101,
         "task_owner_key_id": "kkkk",
         "environment": "DEFAULT",
+        "last_checking": time.time(),
         "deadline": timeout_to_deadline(1201),
         "subtask_timeout": 120,
         "max_price": 10
     }
+
 
 class TestCompSubtaskInfo(TestCase):
     def test_init(self):
@@ -191,7 +260,7 @@ class TestCompTaskKeeper(LogTestCase):
             ctk.remove_task("xyz")
         self.assertIsNone(ctk.active_tasks.get("xyz"))
 
-        header.deadline = get_current_time() - timedelta(seconds=1)
+        header.deadline = get_timestamp_utc() - 1
         ctk.add_request(header, 23)
         self.assertEqual(ctk.active_tasks["xyz"].requests, 1)
         ctk.remove_old_tasks()

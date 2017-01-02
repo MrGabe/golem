@@ -229,7 +229,6 @@ class LicenseCollector(object):
                 return self.get_module_license(module, is_file=is_file)
 
             try:
-
                 if is_file:
                     module = module[:module.rfind('.')]
                 imported = __import__(module)
@@ -241,8 +240,8 @@ class LicenseCollector(object):
                         package = item
                     if not package:
                         package = self._find_package(imported, is_file=is_file)
-            except Exception:
-                pass
+            except Exception as ex:
+                print "Error occurred during getting module license {}".format(ex)
 
         if package:
             meta, lic = self._get_metadata_and_license(package)
@@ -390,8 +389,8 @@ class LicenseCollector(object):
                     k, v = line.split(': ', 1)
                     if k == "License":
                         return '\n'.join(metadata), v
-            except Exception:
-                pass
+            except Exception as ex:
+                print "Error occurred during getting metadata: {}".format(ex)
 
         return None, None
 
@@ -622,8 +621,8 @@ class PackageCreator(Command):
                     proc = subprocess.Popen(('ldconfig', '-v'), stdout=subprocess.PIPE, stderr=fnull)
                     output = subprocess.check_output(('grep', base_name), stdin=proc.stdout)
                     proc.wait()
-            except:
-                pass
+            except Exception as ex:
+                print "Subprocess error: {}".format(ex)
 
             if output:
                 split = output.strip().split('->')
@@ -758,8 +757,8 @@ class PackageCreator(Command):
             if not os.path.exists(dest_path):
                 try:
                     os.makedirs(dest_path, 0755)
-                except:
-                    pass
+                except OSError as ex:
+                    print "Cannot create directory: {}".format(ex)
                 zf.extractall(dest_path)
 
     @staticmethod
@@ -1118,7 +1117,7 @@ def all_assemble(creator, _exe_dir, _lib_dir, x_dir, *args):
     package_subdir = 'golem'
 
     runner_scripts_dir = os.path.join(scripts_dir, 'packaging', 'runner')
-    taskcollector_dir = os.path.join('gnr', 'taskcollector', 'Release')
+    taskcollector_dir = os.path.join('apps', 'rendering', 'resources', 'taskcollector', 'Release')
 
     task_dir = os.path.join('gnr', 'task')
     pack_dir = build_subdir(package_subdir)
@@ -1147,7 +1146,7 @@ def all_assets(creator, exe_dir, lib_dir, x_dir):
     copy_tree(images_dir, images_dest_dir, update=True)
     copy_tree(benchmarks_dir, benchmarks_dest_dir, update=True)
 
-    no_preview_path = os.path.join('gnr', 'ui', 'nopreview.png')
+    no_preview_path = os.path.join('gui', 'view', 'nopreview.png')
     no_preview_dest_path = os.path.join(x_dir, no_preview_path)
 
     if os.path.exists(no_preview_dest_path):
